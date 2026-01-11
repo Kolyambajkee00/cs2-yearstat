@@ -25,7 +25,7 @@ class PlayerAdmin(admin.ModelAdmin):
 
     update_button.short_description = 'Actions'
 
-    # Добавляем кастомный URL
+    # кастомный URL
     def get_urls(self):
         from django.urls import path
         from django.shortcuts import redirect
