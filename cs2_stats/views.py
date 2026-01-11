@@ -1,10 +1,9 @@
 # cs2_stats/views.py
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponse
+from django.contrib import messages
 from .models import Player, MonthlyStat
-import plotly.graph_objects as go
-import plotly.offline as opy
-import json
+from .forms import MonthlyStatForm
+from .utils.chart_utils import prepare_all_charts, calculate_total_stats
 
 
 def home(request):
@@ -38,126 +37,77 @@ def player_profile(request, steam_id):
     player = get_object_or_404(Player, steam_id=steam_id)
     monthly_stats = player.monthly_stats.all().order_by('year', 'month')
 
-    # Создаем графики если есть статистика
-    charts = []
-
-    if monthly_stats:
-        # 1. График K/D ratio
-        kd_chart = create_kd_chart(monthly_stats)
-        charts.append(('📈 K/D Ratio Over Time', kd_chart))
-
-        # 2. График Win Rate
-        winrate_chart = create_winrate_chart(monthly_stats)
-        charts.append(('✅ Win Rate Over Time', winrate_chart))
-
-        # 3. График Matches Played
-        matches_chart = create_matches_chart(monthly_stats)
-        charts.append(('🎮 Matches Played', matches_chart))
+    # Используем функции из utils/chart_utils.py
+    charts = prepare_all_charts(monthly_stats)  # ← Вместо своей логики!
+    total_stats = calculate_total_stats(monthly_stats)  # ← Из utils!
 
     context = {
         'player': player,
         'monthly_stats': monthly_stats,
         'charts': charts,
-        'total_stats': calculate_total_stats(monthly_stats),
+        'total_stats': total_stats,
     }
 
     return render(request, 'cs2_stats/player_profile.html', context)
 
 
-def create_kd_chart(monthly_stats):
-    """Создать график K/D ratio"""
-    months = [f"{stat.year}/{stat.month}" for stat in monthly_stats]
-    kd_ratios = [stat.kd_ratio for stat in monthly_stats]
+def add_monthly_stat(request, steam_id):
+    """Добавление статистики за месяц"""
+    player = get_object_or_404(Player, steam_id=steam_id)
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=months,
-        y=kd_ratios,
-        mode='lines+markers',
-        name='K/D Ratio',
-        line=dict(color='#3498db', width=3),
-        marker=dict(size=10)
-    ))
+    if request.method == 'POST':
+        form = MonthlyStatForm(request.POST)
+        if form.is_valid():
+            monthly_stat = form.save(commit=False)
+            monthly_stat.player = player
+            monthly_stat.save()
 
-    fig.update_layout(
-        title='K/D Ratio Over Time',
-        xaxis_title='Month',
-        yaxis_title='K/D Ratio',
-        template='plotly_white',
-        height=400
-    )
+            # Показываем сообщение об успехе
+            messages.success(request, f'✅ Statistics for {monthly_stat.year}/{monthly_stat.month} added successfully!')
+            return redirect('player_profile', steam_id=steam_id)
+    else:
+        form = MonthlyStatForm()
 
-    return opy.plot(fig, auto_open=False, output_type='div')
-
-
-def create_winrate_chart(monthly_stats):
-    """Создать график Win Rate"""
-    months = [f"{stat.year}/{stat.month}" for stat in monthly_stats]
-    win_rates = [stat.win_rate for stat in monthly_stats]
-
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=months,
-        y=win_rates,
-        name='Win Rate %',
-        marker_color='#2ecc71'
-    ))
-
-    fig.update_layout(
-        title='Win Rate Over Time',
-        xaxis_title='Month',
-        yaxis_title='Win Rate %',
-        template='plotly_white',
-        height=400
-    )
-
-    return opy.plot(fig, auto_open=False, output_type='div')
-
-
-def create_matches_chart(monthly_stats):
-    """Создать график сыгранных матчей"""
-    months = [f"{stat.year}/{stat.month}" for stat in monthly_stats]
-    matches = [stat.matches_played for stat in monthly_stats]
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=months,
-        y=matches,
-        mode='lines+markers',
-        name='Matches Played',
-        fill='tozeroy',
-        line=dict(color='#9b59b6', width=3),
-        marker=dict(size=10)
-    ))
-
-    fig.update_layout(
-        title='Matches Played Per Month',
-        xaxis_title='Month',
-        yaxis_title='Number of Matches',
-        template='plotly_white',
-        height=400
-    )
-
-    return opy.plot(fig, auto_open=False, output_type='div')
-
-
-def calculate_total_stats(monthly_stats):
-    """Рассчитать общую статистику"""
-    total = {
-        'matches': sum(stat.matches_played for stat in monthly_stats),
-        'kills': sum(stat.kills for stat in monthly_stats),
-        'deaths': sum(stat.deaths for stat in monthly_stats),
-        'wins': sum(stat.wins for stat in monthly_stats),
+    context = {
+        'player': player,
+        'form': form,
+        'title': f'Add Statistics for {player.nickname}'
     }
+    return render(request, 'cs2_stats/add_stat.html', context)
 
-    if total['deaths'] > 0:
-        total['kd'] = round(total['kills'] / total['deaths'], 2)
+
+def edit_monthly_stat(request, stat_id):
+    """Редактирование статистики"""
+    stat = get_object_or_404(MonthlyStat, id=stat_id)
+
+    if request.method == 'POST':
+        form = MonthlyStatForm(request.POST, instance=stat)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'✅ Statistics updated successfully!')
+            return redirect('player_profile', steam_id=stat.player.steam_id)
     else:
-        total['kd'] = 0
+        form = MonthlyStatForm(instance=stat)
 
-    if total['matches'] > 0:
-        total['win_rate'] = round((total['wins'] / total['matches']) * 100, 1)
-    else:
-        total['win_rate'] = 0
+    context = {
+        'form': form,
+        'stat': stat,
+        'player': stat.player
+    }
+    return render(request, 'cs2_stats/edit_stat.html', context)
 
-    return total
+
+def delete_monthly_stat(request, stat_id):
+    """Удаление статистики"""
+    stat = get_object_or_404(MonthlyStat, id=stat_id)
+    steam_id = stat.player.steam_id
+
+    if request.method == 'POST':
+        stat.delete()
+        messages.success(request, '✅ Statistics deleted successfully!')
+        return redirect('player_profile', steam_id=steam_id)
+
+    return render(request, 'cs2_stats/delete_stat.html', {'stat': stat})
+
+
+

@@ -1,14 +1,16 @@
 {% extends "cs2_stats/base.html" %}
 
+{% load stat_filters %}
+
 {% block title %}{{ player.nickname }} - CS2 Stats{% endblock %}
 
 {% block content %}
 <div class="row">
-    <!-- Player Profile Card -->
+    <!-- ЛЕВАЯ КОЛОНКА: Профиль игрока -->
     <div class="col-md-4 mb-4">
         <div class="card">
             <div class="card-body text-center">
-                <!-- Avatar -->
+                <!-- Аватар -->
                 {% if player.avatar %}
                 <img src="{{ player.avatar }}" alt="{{ player.nickname }}" class="player-avatar mb-3">
                 {% else %}
@@ -17,7 +19,7 @@
                 </div>
                 {% endif %}
 
-                <!-- Nickname -->
+                <!-- Никнейм -->
                 <h2 class="mb-2">{{ player.nickname|default:"Unknown Player" }}</h2>
 
                 <!-- Steam ID -->
@@ -25,7 +27,7 @@
                     <i class="bi bi-steam"></i> {{ player.steam_id }}
                 </p>
 
-                <!-- Country -->
+                <!-- Страна -->
                 {% if player.country %}
                 <div class="mb-3">
                     <span class="badge bg-secondary">
@@ -33,9 +35,9 @@
                         {{ player.country|upper }}
                     </span>
                 </div>
-{% endif %}
+                {% endif %}
 
-                <!-- CS2 Hours -->
+                <!-- Часы в CS2 -->
                 <div class="mb-4">
                     <h5>
                         <i class="bi bi-clock text-primary"></i>
@@ -43,7 +45,7 @@
                     </h5>
                 </div>
 
-                <!-- Update Button -->
+                <!-- Кнопка обновления -->
                 <form method="post" action="{% url 'player_search' %}">
                     {% csrf_token %}
                     <input type="hidden" name="steam_id" value="{{ player.steam_id }}">
@@ -52,14 +54,14 @@
                     </button>
                 </form>
 
-                <!-- Back to Home -->
+                <!-- На главную -->
                 <a href="{% url 'home' %}" class="btn btn-outline-secondary w-100">
                     <i class="bi bi-house"></i> Back to Home
                 </a>
             </div>
         </div>
 
-        <!-- Quick Stats -->
+        <!-- Быстрая статистика -->
         <div class="card mt-4">
             <div class="card-body">
                 <h5 class="card-title">
@@ -93,11 +95,35 @@
                 </div>
             </div>
         </div>
+
+        <!-- Кнопка управления статистикой -->
+        <div class="card mt-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">
+                    <i class="bi bi-bar-chart"></i> Manage Statistics
+                </h5>
+                <p class="text-muted">Add, edit or view your monthly stats</p>
+
+                <div class="d-flex flex-column gap-2">
+                    <a href="{% url 'add_monthly_stat' player.steam_id %}"
+                       class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Add Monthly Stats
+                    </a>
+
+                    {% if monthly_stats %}
+                    <button type="button" class="btn btn-outline-info"
+                            data-bs-toggle="modal" data-bs-target="#statsModal">
+                        <i class="bi bi-list-check"></i> View All Stats
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Charts and Statistics -->
+    <!-- ПРАВАЯ КОЛОНКА: Графики и таблицы -->
     <div class="col-md-8">
-        <!-- Charts -->
+        <!-- Графики -->
         {% if charts %}
             {% for title, chart in charts %}
             <div class="card mb-4">
@@ -110,21 +136,21 @@
             </div>
             {% endfor %}
         {% else %}
-            <div class="card">
+            <div class="card mb-4">
                 <div class="card-body text-center py-5">
                     <i class="bi bi-bar-chart display-1 text-muted mb-3"></i>
                     <h4>No Statistics Yet</h4>
                     <p class="text-muted">
-                        Add monthly statistics in the admin panel to see charts here.
+                        Start by adding your first monthly statistics!
                     </p>
-                    <a href="/admin/cs2_stats/monthlystat/add/" target="_blank" class="btn btn-primary">
-                        <i class="bi bi-plus-circle"></i> Add Statistics
+                    <a href="{% url 'add_monthly_stat' player.steam_id %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Add Your First Statistics
                     </a>
                 </div>
             </div>
         {% endif %}
 
-        <!-- Monthly Statistics Table -->
+        <!-- Таблица месячной статистики -->
         {% if monthly_stats %}
         <div class="card">
             <div class="card-body">
@@ -142,6 +168,7 @@
                                 <th>Wins</th>
                                 <th>K/D</th>
                                 <th>Win Rate</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -153,14 +180,27 @@
                                 <td>{{ stat.deaths }}</td>
                                 <td>{{ stat.wins }}</td>
                                 <td>
-                                    <span class="badge bg-{% if stat.kd_ratio >= 1.2 %}success{% elif stat.kd_ratio >= 0.8 %}warning{% else %}danger{% endif %}">
+                                    <span class="badge bg-{{ stat.kd_ratio|kd_badge_class }}">
                                         {{ stat.kd_ratio }}
                                     </span>
                                 </td>
                                 <td>
-                                    <span class="badge bg-{% if stat.win_rate >= 60 %}success{% elif stat.win_rate >= 40 %}warning{% else %}danger{% endif %}">
+                                    <span class="badge bg-{{ stat.win_rate|winrate_badge_class }}">
                                         {{ stat.win_rate }}%
                                     </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'edit_monthly_stat' stat.id %}"
+                                           class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{% url 'delete_monthly_stat' stat.id %}"
+                                           class="btn btn-outline-danger btn-sm"
+                                           onclick="return confirm('Delete statistics for {{ stat.year }}/{{ stat.month }}?')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -173,38 +213,72 @@
     </div>
 </div>
 
-<!-- Add Statistics Modal Trigger -->
-<div class="fixed-bottom text-end m-3">
-    <button type="button" class="btn btn-primary btn-lg rounded-circle" data-bs-toggle="modal" data-bs-target="#addStatsModal">
-        <i class="bi bi-plus"></i>
-    </button>
-</div>
-
-<!-- Add Statistics Modal -->
-<div class="modal fade" id="addStatsModal" tabindex="-1">
-    <div class="modal-dialog">
+<!-- Модальное окно управления статистикой -->
+<div class="modal fade" id="statsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Add Monthly Statistics</h5>
+                <h5 class="modal-title">
+                    <i class="bi bi-calendar-month"></i> Manage Monthly Statistics
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>To add statistics for this player, please use the admin panel:</p>
-                <ol>
-                    <li>Go to <a href="/admin/" target="_blank">Admin Panel</a></li>
-                    <li>Login with admin credentials</li>
-                    <li>Navigate to "Monthly stats"</li>
-                    <li>Click "Add monthly stat"</li>
-                    <li>Select this player and enter data</li>
-                </ol>
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i>
-                    In the future, this will be available directly on the site.
+                {% if monthly_stats %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Matches</th>
+                                <th>K/D</th>
+                                <th>Win Rate</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stat in monthly_stats %}
+                            <tr>
+                                <td>{{ stat.year }}/{{ stat.month }}</td>
+                                <td>{{ stat.matches_played }}</td>
+                                <td>
+                                    <span class="badge bg-{{ stat.kd_ratio|kd_badge_class }}">
+                                        {{ stat.kd_ratio }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ stat.win_rate|winrate_badge_class }}">
+                                        {{ stat.win_rate }}%
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'edit_monthly_stat' stat.id %}"
+                                           class="btn btn-outline-primary">
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </a>
+                                        <a href="{% url 'delete_monthly_stat' stat.id %}"
+                                           class="btn btn-outline-danger"
+                                           onclick="return confirm('Delete statistics for {{ stat.year }}/{{ stat.month }}?')">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-bar-chart display-4 text-muted"></i>
+                    <p class="mt-3">No statistics yet. Add your first month!</p>
+                </div>
+                {% endif %}
             </div>
             <div class="modal-footer">
-                <a href="/admin/cs2_stats/monthlystat/add/" target="_blank" class="btn btn-primary">
-                    <i class="bi bi-plus-circle"></i> Go to Admin
+                <a href="{% url 'add_monthly_stat' player.steam_id %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Add New Month
                 </a>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
