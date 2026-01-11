@@ -16,7 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+# cs2_stats/urls.py
+from django.contrib import admin
+from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', include('cs2_stats.urls')),  # ← ДОБАВЬ ЭТУ СТРОКУ
 ]
